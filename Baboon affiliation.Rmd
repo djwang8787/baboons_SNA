@@ -1,0 +1,659 @@
+---
+title: "Age, relative harem size and vigilance does not predict affiliative social networks between captive baboon one-male units"
+author: "Laura Elizabeth Cheng Li Ling"
+co-author: "Dajun Wang"
+date: "1/12/2023"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+pacman::p_load(igraph, igraphdata, tidyverse, qgraph, 
+               kableExtra, influenceR, keyplayer, sna,
+               gridExtra, ggplot2)
+
+# To print/save figures for manuscript use
+make_tall_fig = function(object){
+  filename = paste0(as.character(substitute(object)), ".png")
+  png.test = png(filename = as.character(filename), width = 19.05, height = 22.23, units = 'cm', res = 300)
+  grid.arrange (object, newpage = TRUE)
+  dev.off()
+}
+
+make_wide_fig = function(object){
+  filename = paste0(as.character(substitute(object)), ".png")
+  png.test = png(filename = as.character(filename), height = 19.05, width = 22.23, units = 'cm', res = 300)
+  grid.arrange (object, newpage = TRUE)
+  dev.off()
+}
+```
+
+
+# Affiliation networks
+- Removed Ralph from the analyses because his activity / behaviours weren't recorded
+- he is also a male without a harem, so it's not fitting for the study
+
+```{r Baboon-network-edgelist}
+Baboonaf_el <- read.csv('Baboon_affiliation_2.csv', header = TRUE)
+Baboonaf <- graph_from_data_frame(Baboonaf_el, directed = TRUE)
+
+par(mar=c(0,0,0,0)+.1) # reduce the margins
+set.seed(1) # fix graph layout (to get the same network layout)
+plot(Baboonaf, 
+     edge.arrow.size = 0.3, 
+     edge.width = E(Baboonaf)$weight/3, 
+     layout = layout.circle, 
+     vertex.label.cex = 0.6,
+     vertex.label.dist = 1, 
+     vertex.size = 7, 
+     edge.curved = 0.1)
+```
+
+
+```{r Baboon-network-adjacencymatrix}
+Baboonaf_am <- read.csv('Baboon_affiliation_adjmat_2.csv', header = TRUE, row.names = 1)
+colnames(Baboonaf_am) <- rownames(Baboonaf_am)
+Baboonaf_am <- as.matrix(Baboonaf_am)
+Baboonaf <- graph_from_adjacency_matrix(Baboonaf_am, mode = 'directed', weighted = TRUE)
+
+summary(Baboonaf)
+
+par(mar=c(0,0,0,0)+.1)
+plot(Baboonaf, edge.arrow.size = 0.3, edge.width = E(Baboonaf)$weight/3, layout = layout.circle, vertex.label.cex = 0.6, vertex.label.dist = 1, vertex.size = 7, edge.curved = 0.1)
+## Vertex size = node size
+```
+
+```{r Baboon-network-ageasnodesize}
+summary(Baboonaf)
+V(Baboonaf)$name
+age <- c(15, 20, 20, 17, 18, 17, 15, 12, 15, 19, 18, 20, 18, 15)
+
+par(mar=c(0,0,0,0)+.1)
+plot(Baboonaf, 
+     edge.arrow.size = 0.3, 
+     edge.width = E(Baboonaf)$weight/3, 
+     layout = layout.circle, 
+     vertex.label.cex = 0.6, 
+     vertex.label.dist = 2, 
+     vertex.size = age, 
+     edge.curved = 0.1)
+```
+
+```{r Degree, eval = F}
+# Laura says strength is more useful because it will take account of "weights"
+igraph::degree(Baboonaf, mode = "all") ##total affiliation interactions
+igraph::degree(Baboonaf, mode = "out") # all outgoing affiliation interactions
+igraph::degree(Baboonaf, mode = "in") # all incoming affiliation interactions; all based on counts
+
+degreeaf <- igraph::degree(Baboonaf, mode = "all")
+
+set.seed(1)
+plot(Baboonaf, vertex.size=degreeaf*2, edge.arrow.size = 0.3, edge.width = E(Baboonaf)$weight/3, layout = layout.circle, vertex.label.cex = 0.6, vertex.label.dist = 2, edge.curved = 0.1) 
+# Vertex size based on total degree; bigger means that they have more connections to other nodes
+```
+
+```{r Strength}
+strength(Baboonaf, mode = "all")
+strength(Baboonaf, mode = "out")
+strength(Baboonaf, mode = "in")
+
+allstrengthaf <- strength(Baboonaf, mode = "all")
+allstrengthaf_df <- data.frame(as_af = allstrengthaf)
+allstrengthaf_df %>% dplyr::arrange(desc(as_af)) # Zzu (24), Totem (19), Jeremy (18)
+
+plot(Baboonaf, 
+     vertex.size=allstrengthaf*2, 
+     edge.arrow.size = 0.3, 
+     edge.width = E(Baboonaf)$weight/3, 
+     layout = layout.circle, 
+     vertex.label.cex = 0.6, 
+     vertex.label.dist = 2, 
+     edge.curved = 0.1) 
+# Vertex size based on total strength; bigger means that they have stronger connections to other nodes
+
+
+outstrengthaf <- strength(Baboonaf, mode = "out")
+outstrengthaf_df <- data.frame(os_af = outstrengthaf)
+outstrengthaf_df %>% dplyr::arrange(desc(os_af)) # Zzu (12), Jeremy (11), Uncle (9)
+
+plot(Baboonaf, 
+     vertex.size=outstrengthaf*2, 
+     edge.arrow.size = 0.3, 
+     edge.width = E(Baboonaf)$weight/3, 
+     layout = layout.circle, 
+     vertex.label.cex = 0.6, 
+     vertex.label.dist = 2, 
+     edge.curved = 0.1) # Vertex size based on out-strength; bigger means that they have stronger connections to other nodes
+
+instrengthaf <- strength(Baboonaf, mode = "in")
+instrengthaf_df <- data.frame(is_af = instrengthaf)
+instrengthaf_df %>% dplyr::arrange(desc(is_af)) # Zzu (12), Totem (11), Bear (9) and Rambutan (9)
+
+plot(Baboonaf, 
+     vertex.size=instrengthaf*2, 
+     edge.arrow.size = 0.3, 
+     edge.width = E(Baboonaf)$weight/3, 
+     layout = layout.circle, 
+     vertex.label.cex = 0.6, 
+     vertex.label.dist = 2, 
+     edge.curved = 0.1) # Vertex size based on in-strength; bigger means that they have stronger connections to other nodes
+
+# Overall, based on highest strength overall, Zzu, Totem and Jeremy have the strongest connections to other nodes in the network / other baboons in the group.
+```
+
+```{r Closeness-centrality}
+rbind(V(Baboonaf)$label, 
+      igraph::closeness(Baboonaf, normalized = TRUE, weights = E(Baboonaf)$weight) %>% 
+        round(3))
+```
+
+```{r Betweenness-centrality}
+rbind(V(Baboonaf)$label, igraph::betweenness(Baboonaf) %>% 
+        round (3))
+```
+
+```{r Eigenvector-centrality}
+rbind(V(Baboonaf)$label, 
+      eigen_centrality(Baboonaf, directed = TRUE, scale = TRUE)$vector %>% 
+        round(3))
+# Vertices with high eigenvector centralities are those which are connected to many other vertices which are, in turn, connected to many others (and so on). This implies that the largest values will be obtained by individuals in large cliques (or high-density substructures).
+```
+
+```{r Global-transitivity}
+# Exploratory analysis; @Laura
+# global clustering coefficient
+summary(Baboonaf)
+set.seed(1)
+randomnetwork <- sample_gnm(n = 14, m = 55, directed = TRUE, loops = FALSE)
+summary(randomnetwork)
+transitivity(Baboonaf, type = 'global') # 0.478
+transitivity(randomnetwork, type = 'global') # 0.4719
+```
+
+```{r Reciprocity}
+# Exploratory analysis; @Laura
+# The measure of reciprocity defines the proportion of mutual connections in a directed graph.
+reciprocity(Baboonaf) # Proportion of reciprocated ties = 0.654
+dyad_census(Baboonaf)
+2*dyad_census(Baboonaf)$mut/ecount(Baboonaf)
+```
+
+```{r Components}
+# Exploratory analysis; @Laura
+igraph::components(Baboonaf)$no # 1
+igraph::components(Baboonaf)$csize %>% 
+  max() # 15
+```
+
+```{r Small-worldness}
+# Exploratory analysis; @Laura
+# This baboon network is a small world (index >= 1; but a stricter rule is index >=3).
+# High global transitivity and low shortest path length; many social networks are "small world" networks
+smallworldness(Baboonaf, B = 1000) # 1.172
+```
+
+```{r Community-detection-undirected}
+Baboonaf_ud <- as.undirected(Baboonaf, mode = 'collapse') # convert to an undirected network
+
+summary(Baboonaf_ud)
+
+par(mar=c(0,0,0,0)+.1)
+set.seed(1)
+
+plot(Baboonaf_ud, 
+     edge.arrow.size = 0.3, 
+     edge.width = E(Baboonaf_ud)$weight/3, 
+     layout = layout.circle, 
+     vertex.label.cex = 0.6,
+     vertex.label.dist = 2)
+
+Baboonaf_louvain <- cluster_louvain(Baboonaf_ud, weights = E(Baboonaf_ud)$weight)
+
+Baboonaf_louvain_membership <- data.frame(node = 1:gorder(Baboonaf_ud), community = Baboonaf_louvain$membership)
+
+table(Baboonaf_louvain_membership$community)
+
+membership(Baboonaf_louvain)
+
+modularity(Baboonaf_louvain) # 0.278
+
+par(mar=c(0,0,0,0)+.1)
+V(Baboonaf_ud)$community <- Baboonaf_louvain$membership # assign community membership as a node attribute
+
+plot(Baboonaf_ud, 
+     vertex.color=V(Baboonaf_ud)$community, 
+     vertex.size = 10, 
+     vertex.frame.color = 'black', 
+     layout = layout_with_fr(Baboonaf_ud), 
+     vertex.label.cex = 1,
+     vertex.label.dist = 2, 
+     edge.width = E(Baboonaf_ud)$weight/3)
+```
+
+
+```{r Community-detection-directed}
+plot(Baboonaf, #Baboonaf is a directed igraph object/class
+     edge.arrow.size = 0.3, 
+     edge.width = E(Baboonaf_ud)$weight/3, 
+     layout = layout.circle, 
+     vertex.label.cex = 0.6,
+     vertex.label.dist = 2)
+
+baboonaf_spinglass = cluster_spinglass(Baboonaf, weights = E(Baboonaf)$weight) #modularity 0.12
+baboonaf_spinglass_membership <- data.frame(node = 1:gorder(Baboonaf), community = baboonaf_spinglass$membership)
+table(baboonaf_spinglass_membership$community)
+membership(baboonaf_spinglass)
+modularity(baboonaf_spinglass) #0.12
+V(Baboonaf)$community <- baboonaf_spinglass$membership # assign community membership as a node attribute
+plot(Baboonaf, 
+     vertex.color=V(Baboonaf)$community, 
+     vertex.size = 10, 
+     vertex.frame.color = 'black', 
+     layout = layout_with_fr(Baboonaf), 
+     vertex.label.cex = 1,
+     vertex.label.dist = 2, 
+     edge.width = E(Baboonaf)$weight/3)
+
+
+Baboonaf_louvain <- cluster_louvain(Baboonaf_ud, weights = E(Baboonaf)$weight)
+
+Baboonaf_louvain_membership <- data.frame(node = 1:gorder(Baboonaf_ud), community = Baboonaf_louvain$membership)
+
+table(Baboonaf_louvain_membership$community)
+
+membership(Baboonaf_louvain)
+
+modularity(Baboonaf_louvain) # 0.278
+
+par(mar=c(0,0,0,0)+.1)
+V(Baboonaf_ud)$community <- Baboonaf_louvain$membership # assign community membership as a node attribute
+
+plot(Baboonaf_ud, 
+     vertex.color=V(Baboonaf_ud)$community, 
+     vertex.size = 10, 
+     vertex.frame.color = 'black', 
+     layout = layout_with_fr(Baboonaf_ud), 
+     vertex.label.cex = 1,
+     vertex.label.dist = 2, 
+     edge.width = E(Baboonaf_ud)$weight/3)
+```
+
+```{r Assortativity-degree}
+assortativity_degree(Baboonaf, directed = T) # -0.140
+# The assortativity coefficient is negative. Baboons that are dissimilar in degree tend to connect to each other. Baboons that have higher degrees tend to connect to baboons that have lower degrees and vice versa.
+```
+
+```{r Assortativity-age}
+Baboonaf_age <- set_vertex_attr(graph = Baboonaf, 
+                                name = 'age', 
+                                value = c('15', '20', '20', '17', '18', 
+                                          '17', '15', '12', '15', '19', 
+                                          '18', '20', '18', '15'))
+
+summary(Baboonaf_age)
+V(Baboonaf_age)$name
+V(Baboonaf_age)$age
+
+assortativity_nominal(Baboonaf_age, 
+                      V(Baboonaf_age)$age, 
+                      directed = F) # 0.061
+# The assortativity coefficient is positive. Baboons that are similar in age tend to connect to each other. Baboons that are older tend to connect to baboons that are also older, while baboons that are younger tend to connect to baboons that are also younger.
+
+
+assortativity_degree(Baboonaf,
+                     directed = F) # -0.14
+
+# male age assortativity; 0.06 (not so great, bad)
+plot(Baboonaf_ud, 
+     vertex.color=V(Baboonaf_ud)$community, 
+     vertex.size = 10, 
+     vertex.frame.color = 'black', 
+     layout = layout_with_fr(Baboonaf_ud), 
+     vertex.label.cex = 1,
+     vertex.label.dist = 2, 
+     edge.width = E(Baboonaf_ud)$weight/3,
+     vertex.label = c('15', '20', '20', '17', '18', 
+                      '17','15', '12', '15', '19', 
+                      '18', '20', '18', '15'))
+```
+
+```{r Assortativity-haremfemales}
+Baboonaf_hf <- set_vertex_attr(Baboonaf, 
+                               name = 'haremfemales', 
+                               value = c('2', '2', '2', '5', '4', '5',
+                                         '7', '1', '3', '1', '2', 
+                                         '2', '2', '4'))
+summary(Baboonaf_hf)
+V(Baboonaf_hf)$name
+V(Baboonaf_hf)$haremfemales
+
+assortativity_nominal(Baboonaf_hf, 
+                      V(Baboonaf_hf)$haremfemales, 
+                      directed = F) # -0.215
+# The assortativity coefficient is negative. 1) Baboons that are dissimilar in number of harem females tend to connect to each other, 2) Baboons that have more females in their harems tend to "connect" with baboons that have fewer females in their harems and vice versa. 
+
+
+# Harem size assortativity; -0.205, slightly better but not great either
+plot(Baboonaf_ud, 
+     vertex.color=V(Baboonaf_ud)$community, 
+     vertex.size = 10, 
+     vertex.frame.color = 'black', 
+     layout = layout_with_fr(Baboonaf_ud), 
+     vertex.label.cex = 1,
+     vertex.label.dist = 2, 
+     edge.width = E(Baboonaf_ud)$weight/3,
+     vertex.label = c('2', '2', '2', '5', '4', 
+                      '5','7', '1', '3', '1', 
+                      '2', '2', '2', '4'))
+```
+
+```{r}
+Baboonaf_am
+W <- Baboonaf_am
+A <- W
+A[W != 0] <- 1 / W[W != 0]
+```
+
+```{r}
+# Centrality measures using 'keyplayer' package
+# Degree
+degree(W, ignore.eval = FALSE) # "total strength" in igraph
+degree(W, ignore.eval = FALSE, cmode = "indegree") # "in strength" in igraph
+degree(W, ignore.eval = FALSE, cmode = "outdegree") # "out strength"
+
+kpset(W, size = 3, type = "degree", method = "max", cmode = "total") # 5, 10, 15
+kpset(W, size = 3, type = "degree", method = "max", cmode = "indegree") # 1, 6, 13
+kpset(W, size = 3, type = "degree", method = "max", cmode = "outdegree") # 5, 14, 15
+
+# Closeness centrality
+closeness(A, ignore.eval = FALSE)
+kpset(A, size = 3, type = "closeness", method = "min") # 5, 9, 14
+
+# Betweenness centrality
+betweenness(A, ignore.eval = FALSE, cmode = "directed")
+kpset(A, size = 3, type = "betweenness", method = "min") # 5, 10, 15
+
+# Eigenvector centrality
+B <- symmetrize(W)
+evcent(B)
+kpset(B, size = 3, type = "evcent", method = "max") # 10, 13, 15
+
+# Fragmentation centrality
+fragment(A)
+kpset(A, size = 3, type = "fragment", method = "min") # 5, 8, 15
+
+# Paper (An & Liu, 2016) suggests that researchers think about which centrality measures they should use in their specific contexts to select key players.
+```
+
+## Activity budget
+
+```{r activity budget of baboons}
+data <- read.csv("zm_final.csv")
+
+data2 <- data[ , c(1, 9, 21, 23, 25, 28, 30, 32:36, 38:39, 41:44)]
+data2 <- memisc::rename(data2, ## rename() exists in multiple packages. need to specify.
+                         All.Occurrence.Value = "AllOcc.Beh",
+                         All.Occurrence.Behavior.Social.Modifier = "AllOcc.Recipient",
+                         Interval.Channel.1.Value = "Int.Beh",
+                         Interval.Channel.1.Behavior.Modifier.1 = "Role",
+                         Interval.Channel.1.Social.Modifier = "Int.Recipient",
+                         Space.Use.Grid.X = "Grid.X",
+                         Space.Use.Grid.Y = "Grid.Y",
+                         Space.Use.Coordinate.X = "Coord.X",
+                         Space.Use.Coordinate.Y = "Coord.Y",
+                         Question..No..of.adult.males.present..total.1_69 = "M.Present",
+                         Question..No..of.adult.males.sterilised_71 = "M.Sterile",
+                         Question..No..of.adult.females.present..total_70 = "F.Present",
+                         Question..No..of.adult.females.sterilised_72 = "F.Sterile",
+                         warn = FALSE
+                         )
+vigil.total = data2 %>%
+  filter(!Focal.Name == "Ralph") %>%
+  dplyr::group_by(Focal.Name) %>%
+  dplyr::summarise(total = n()) 
+
+vigil.count = data2 %>%
+  dplyr::filter(Int.Beh == "Vigilance") %>%
+  dplyr::group_by(as.factor(Focal.Name)) %>%
+  dplyr::summarise(counts = n()) 
+
+vigil.prop = cbind(
+  vigil.count, vigil.total) %>%
+  dplyr::mutate(prop = (counts/total)*100)
+  
+```
+
+```{r vigilance assortivity}
+Baboonaf_vigil = set_vertex_attr(Baboonaf, 
+                               name = 'vigil', 
+                               value = vigil.prop$prop)
+summary(Baboonaf_vigil)
+V(Baboonaf_vigil)$name
+V(Baboonaf_vigil)$vigil
+
+assortativity_nominal(Baboonaf_vigil, 
+                      V(Baboonaf_vigil)$vigil, 
+                      directed = F) # -0.052
+# The assortativity coefficient is negative. 
+
+
+baboonaf_assort = set_vertex_attr(Baboonaf, 
+                               name = 'vigil', 
+                               value = vigil.prop$prop)
+
+baboonaf_assort = set_vertex_attr(baboonaf_assort, 
+                               name = 'haremfemales', 
+                               value = c('2', '2', '2', '5', '4', '5',
+                                         '7', '1', '3', '1', '2', 
+                                         '2', '2', '4'))
+
+baboonaf_assort <- set_vertex_attr(baboonaf_assort, 
+                                name = 'age', 
+                                value = c('15', '20', '20', '17', '18', '17', 
+                                          '15', '12', '15', '19', '18', 
+                                          '20', '18', '15'))
+
+assortativity_nominal(baboonaf_assort,
+              V(baboonaf_assort)$haremfemales,
+              directed = TRUE)
+
+assortativity_nominal(baboonaf_assort,
+              V(baboonaf_assort)$age,
+              directed = TRUE)
+
+assortativity_nominal(baboonaf_assort,
+              V(baboonaf_assort)$vigil,
+              directed = TRUE)
+
+
+plot(Baboonaf_ud, 
+     vertex.color=V(Baboonaf_ud)$community, 
+     vertex.size = 10, 
+     vertex.frame.color = 'black', 
+     layout = layout_with_fr(Baboonaf_ud), 
+     vertex.label.cex = 1,
+     vertex.label.dist = 2, 
+     edge.width = E(Baboonaf_ud)$weight)
+
+```
+
+## Aggression networks
+
+```{r Baboon-network-adjacencymatrix-aggression}
+Baboonagg_am <- read.csv('Baboon_aggression_adjmat.csv', header = TRUE, row.names = 1)
+colnames(Baboonagg_am) <- rownames(Baboonagg_am)
+Baboonagg_am <- as.matrix(Baboonagg_am)
+Baboonagg <- graph_from_adjacency_matrix(Baboonagg_am, mode = 'directed', weighted = TRUE)
+
+summary(Baboonagg)
+
+par(mar=c(0,0,0,0)+.1)
+plot(Baboonagg, edge.arrow.size = 0.3, edge.width = E(Baboonaf)$weight/3, layout = layout.circle, vertex.label.cex = 0.6, vertex.label.dist = 1, vertex.size = 7, edge.curved = 0.1)
+## Vertex size = node size
+```
+
+
+
+
+```{r Strength aggression}
+strength(Baboonagg, mode = "all")
+strength(Baboonagg, mode = "out")
+strength(Baboonagg, mode = "in")
+
+allstrengthagg <- strength(Baboonagg, mode = "all")
+allstrengthagg_df <- data.frame(as_agg = allstrengthagg)
+allstrengthagg_df %>% dplyr::arrange(desc(as_agg)) # Bear (6), Scruffy (5), Mascot (4)
+
+plot(Baboonagg, 
+     vertex.size=allstrengthagg*2, 
+     edge.arrow.size = 0.3, 
+     edge.width = E(Baboonagg)$weight/3, 
+     layout = layout.circle, 
+     vertex.label.cex = 0.6, 
+     vertex.label.dist = 2, 
+     edge.curved = 0.1) 
+# Vertex size based on total strength; bigger means that they have stronger connections to other nodes
+
+
+outstrengthagg <- strength(Baboonagg, mode = "out")
+outstrengthagg_df <- data.frame(os_agg = outstrengthagg)
+outstrengthagg_df %>% dplyr::arrange(desc(os_agg)) # Bear (4), Uncle (3), Zzu (3)
+
+plot(Baboonagg, 
+     vertex.size=outstrengthagg*2, 
+     edge.arrow.size = 0.3, 
+     edge.width = E(Baboonagg)$weight/3, 
+     layout = layout.circle, 
+     vertex.label.cex = 0.6, 
+     vertex.label.dist = 2, 
+     edge.curved = 0.1) # Vertex size based on out-strength; bigger means that they have stronger connections to other nodes
+
+instrengthagg <- strength(Baboonagg, mode = "in")
+instrengthagg_df <- data.frame(is_agg = instrengthagg)
+instrengthagg_df %>% dplyr::arrange(desc(is_agg)) # Poodle (3), Scruffy (3), Bear (2) 
+
+plot(Baboonagg, 
+     vertex.size=instrengthagg*2, 
+     edge.arrow.size = 0.3, 
+     edge.width = E(Baboonagg)$weight/3, 
+     layout = layout.circle, 
+     vertex.label.cex = 0.6, 
+     vertex.label.dist = 2, 
+     edge.curved = 0.1) # Vertex size based on in-strength; bigger means that they have stronger connections to other nodes
+
+# Overall, based on highest strength overall, Zzu, Totem and Jeremy have the strongest connections to other nodes in the network / other baboons in the group.
+```
+
+Does vigilance explain the aggression networks ?
+
+```{r Closeness-centrality}
+rbind(V(Baboonagg)$label, 
+      igraph::closeness(Baboonagg, normalized = TRUE, weights = E(Baboonagg)$weight)) %>% 
+        round(3)
+```
+
+```{r Betweenness-centrality}
+rbind(V(Baboonagg)$label, igraph::betweenness(Baboonagg)) %>% 
+        round (3)
+```
+
+```{r Eigenvector-centrality}
+rbind(V(Baboonagg)$label, 
+      eigen_centrality(Baboonagg, directed = TRUE, scale = TRUE)$vector %>% 
+        round(3))
+# Vertices with high eigenvector centralities are those which are connected to many other vertices which are, in turn, connected to many others (and so on). This implies that the largest values will be obtained by individuals in large cliques (or high-density substructures).
+```
+
+```{r Community-detection}
+Baboonagg_ud <- as.undirected(Baboonagg, mode = 'collapse') # convert to an undirected network
+summary(Baboonagg_ud)
+
+Baboonaf_louvain <- cluster_louvain(Baboonagg_ud, 
+                                    weights = E(Baboonagg_ud)$weight)
+
+Baboonaf_louvain_membership <- data.frame(node = 1:gorder(Baboonagg_ud),
+                                          community = Baboonaf_louvain$membership)
+
+table(Baboonaf_louvain_membership$community)
+membership(Baboonaf_louvain)
+modularity(Baboonaf_louvain) # 0.36
+
+
+V(Baboonagg_ud)$community <- Baboonaf_louvain$membership # assign community membership as a node attribute
+
+plot(Baboonagg_ud,
+     vertex.color=V(Baboonagg_ud)$community, 
+     vertex.size = 10, 
+     vertex.frame.color = 'black', 
+     layout = layout_with_fr(Baboonagg_ud), 
+     vertex.label.cex = 1,
+     vertex.label.dist = 2, 
+     edge.width = E(Baboonagg_ud)$weight/3)
+```
+
+```{r assortativity}
+Baboonagg_hf <- set_vertex_attr(Baboonagg, 
+                               name = 'haremfemales', 
+                               value = c('2', '2', '2', '5', '4', '5',
+                                         '7', '1', '3', '1', '2', 
+                                         '2', '2', '4'))
+
+plot(Baboonagg_ud,
+     vertex.color=V(Baboonagg_ud)$community, 
+     vertex.size = 10, 
+     vertex.frame.color = 'black', 
+     layout = layout_with_fr(Baboonagg_ud), 
+     vertex.label.cex = 1,
+     vertex.label.dist = 2, 
+     edge.width = E(Baboonagg_ud)$weight/3,
+     vertex.label = c('2', '2', '2', '5', '4', '5',
+                      '7', '1', '3', '1', '2',
+                      '2', '2', '4'))
+
+baboonagg_assort = set_vertex_attr(Baboonagg, 
+                               name = 'vigil', 
+                               value = vigil.prop$prop)
+
+baboonagg_assort = set_vertex_attr(baboonagg_assort, 
+                               name = 'haremfemales', 
+                               value = c('2', '2', '2', '5', '4', '5',
+                                         '7', '1', '3', '1', '2', 
+                                         '2', '2', '4'))
+
+baboonagg_assort <- set_vertex_attr(baboonagg_assort, 
+                                name = 'age', 
+                                value = c('15', '20', '20', '17', '18', '17', 
+                                          '15', '12', '15', '19', '18', 
+                                          '20', '18', '15'))
+
+assortativity_nominal(baboonagg_assort,
+              V(baboonagg_assort)$haremfemales,
+              directed = TRUE) # -0.08
+
+assortativity_nominal(baboonagg_assort,
+              V(baboonagg_assort)$age,
+              directed = TRUE) # 0.06
+
+assortativity_nominal(baboonagg_assort,
+              V(baboonagg_assort)$vigil,
+              directed = TRUE) # -0.123
+
+```
+
+```{r mantell tests}
+ape::mantel.test(as.matrix(Baboonaf_am), 
+                 as.matrix(Baboonagg_am), 
+                 nperm = 999,
+                 graph = T,
+                 alternative = "two.sided",
+                 main = "Mantel test on a 14 x 14 matrices comparing between the affiliative and agonistic interactions in Hamadryas baboons one-male units.",
+xlab = "z-statistic", 
+ylab = "Density",
+            sub = "The vertical line shows the observed z-statistic")
+
+# p value: < 0.05, 0.043
+```
+Mantell tests to examine for significant differences between matrices:
+- 

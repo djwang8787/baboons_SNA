@@ -1,0 +1,416 @@
+---
+title: "hamadryas_beh"
+output: html_document
+date: '2022-07-28'
+---
+
+# DATA LOGGED SINCE 24 AUG
+```{r}
+data <- read.csv("zm_final.csv")
+
+library(vegan)
+library(ggplot2)
+library(lme4)
+library(tidyverse)
+library(mvabund)
+library(dplyr)
+
+# CLEANING UP OF DATASET
+
+data2 <- data[ , c(1, 9, 21, 23, 25, 28, 30, 32:36, 38:39, 41:44)]
+
+library(memisc)
+
+data2 <- memisc::rename(data2, ## rename() exists in multiple packages. need to specify.
+                         All.Occurrence.Value = "AllOcc.Beh",
+                         All.Occurrence.Behavior.Social.Modifier = "AllOcc.Recipient",
+                         Interval.Channel.1.Value = "Int.Beh",
+                         Interval.Channel.1.Behavior.Modifier.1 = "Role",
+                         Interval.Channel.1.Social.Modifier = "Int.Recipient",
+                         Space.Use.Grid.X = "Grid.X",
+                         Space.Use.Grid.Y = "Grid.Y",
+                         Space.Use.Coordinate.X = "Coord.X",
+                         Space.Use.Coordinate.Y = "Coord.Y",
+                         Question..No..of.adult.males.present..total.1_69 = "M.Present",
+                         Question..No..of.adult.males.sterilised_71 = "M.Sterile",
+                         Question..No..of.adult.females.present..total_70 = "F.Present",
+                         Question..No..of.adult.females.sterilised_72 = "F.Sterile",
+                         warn = FALSE
+                         )
+
+library(formattable)
+
+data2$PercentSM <- data2$M.Sterile / data2$M.Present
+data2$PercentSM <- formattable::percent(data2$PercentSM)
+
+data2$PercentSF <- data2$F.Sterile / data2$F.Present
+data2$PercentSF <- formattable::percent(data2$PercentSF)
+```
+
+
+# ACTIVITY BUDGET PLOTS
+```{r}
+# overall (all males)
+
+data.all <- as.data.frame(table(data2$Int.Beh))
+
+data.all <- filter(data.all, Var1 != '') #remove empty rows where no behaviour recorded (forgot to record?)
+
+beh.vec <- c("Affiliative", "Aggressive", "Allogroom", "Dominance", "Submissive", "Vigilance", "Locomotion", "Forage", "Self-directed", "Rest", "Sleep", "Other", "Behaviour unclear")
+
+data.all <- data.all %>% mutate(Var1 = factor(Var1, levels = beh.vec)) %>%
+  arrange(Var1) # rearranging Var1
+
+#create column of short forms, then rearrange similarly. using mutate again will mess up dataset, so just use factor.
+
+beh.vec.short <- c("Aff", "Agg", "Allo", "Dom", "Sub", "Vigil", "Loc", "Forage", "Self", "Rest", "Sleep", "Other", "Unclear")
+
+data.all$shortForm <- beh.vec.short
+
+data.all$shortForm <- factor(data.all$shortForm, levels = beh.vec.short)
+```
+
+
+```{r}
+ggplot(data.all, aes(shortForm, Freq, fill = Var1)) +
+  geom_bar(stat="identity", color="black", position=position_dodge()) +
+  theme_classic() +
+    labs(x = "Behaviour", y = "Counts", fill = "Behaviour")
+```
+
+```{r}
+#individual males
+
+data.indiv <- data2 %>% dplyr::count(Focal.Name, Int.Beh)
+
+data.indiv <- filter(data.indiv, Int.Beh != '')
+```
+
+```{r}
+ggplot(data.indiv, aes(Int.Beh,n, fill = Int.Beh)) +
+  geom_bar(stat="identity", color="black", position=position_dodge()) +
+  theme_classic() +
+    labs(x = "Behaviour", y = "Counts", fill = "Behaviour") +
+      facet_wrap(.~Focal.Name)
+```
+
+
+
+# CREATING EDGE LISTS - SNA
+```{r}
+library(igraph)
+library(igraphdata)
+library(qgraph)
+library(kableExtra)
+
+aff.vec <- c("Gential touch", "Notifying present", "Lipsmack")
+agg.vec <- c("Threat", "Lunge", "Chase", "Contact aggression", "Neck bite", "Interposition")
+males.vec <- c("Bear", "Blondie", "Boss", "Helmet", "Jeremy", "King", "Mascot", "Poodle", "Rambutan", "Romeo", "Scruffy", "Totem", "Uncle", "Zzu", "Ralph")
+
+full.data <- data2 %>% dplyr::select(Focal.Name, AllOcc.Beh, AllOcc.Recipient) %>%
+  memisc::rename(Focal.Name = source, AllOcc.Beh = behaviour, AllOcc.Recipient = target) %>%
+  filter(source %in% males.vec & target %in% males.vec)
+
+aff.data <- full.data %>% filter(behaviour %in% aff.vec)
+agg.data <- full.data %>% filter(behaviour %in% agg.vec)
+
+# CREATING EDGE DF
+
+aff.edges <- aff.data %>% group_by(source) %>%
+  count(target) %>%
+  memisc::rename(n = weight)
+
+agg.edges <- agg.data %>% group_by(source) %>%
+  count(target) %>%
+  memisc::rename(n = weight)
+
+# CREATING NODE DF
+
+#aff.nodes <- aff.data %>% dplyr::select(source) %>%
+  #group_by(source) %>%
+ # summarise() %>%
+ # rename(source = name)
+
+#nodes <- as.data.frame(males.vec)
+```
+
+
+
+# SNA NETWORKS, +ve KPA
+```{r}
+aff.qgraph = qgraph(aff.edges,
+                    edge.labels = TRUE, # FALSE to remove numbers
+                    edge.color = "blue",
+                    title = "Affiliative relationships")
+```
+
+```{r}
+# AFF NETWORK +ve KPA
+
+aff.igraph <- graph_from_data_frame(aff.edges, directed = TRUE, vertices = NULL)
+#create an igraph graph from aff.edges (cannot use the one from qgraph cause diff package)
+
+library(influenceR)
+
+set.seed(1) # set a random seed generator to reproduce your analysis
+keyplayer(aff.igraph, k = 1) # k = number of key players
+
+```
+
+
+```{r}
+agg.qgraph = qgraph(agg.edges,
+                    edge.labels = TRUE,
+                    edge.color = "red",
+                    title = "Aggressive relationships")
+```
+
+affiliative: more reciprocal relationships
+- most of the agg interactions are "chase", which is one-way. threats could be exchanged before chase commences but missed out while sampling
+ 
+ralph only receives aggression (does not return)
+
+```{r}
+# AGG NETWORK +ve KPA
+
+agg.igraph <- graph_from_data_frame(agg.edges, directed = TRUE, vertices = NULL)
+#create an igraph graph from aff.edges (cannot use the one from qgraph cause diff package)
+#agg.igraph <- as.igraph.qgraph(agg.graph, attributes = TRUE)
+
+library(influenceR)
+
+set.seed(1)
+keyplayer(agg.igraph, k = 1)
+```
+
+
+# converting graphs to adjacency matrices
+```{r}
+#library(keyplayer)
+#library(sna)
+
+aff.adj <- get.adjacency(aff.igraph,
+              names = TRUE,                   #vertice names
+              attr = 'weight',                #for weighted adjmat
+              sparse = FALSE)
+#convert graph to adjacency matrix
+
+agg.adj <- get.adjacency(agg.igraph,
+              names = TRUE,                   #vertice names
+              attr = 'weight',                #for weighted adjmat
+              sparse = FALSE)
+
+#write.csv(aff.adj, "aff_adj.csv", row.names = FALSE)
+#write.csv(agg.adj, "agg_adj.csv", row.names = FALSE)
+```
+
+
+# individual degree centrality
+```{r}
+central.aff <- centralityTable(aff.qgraph)
+
+central.agg <- centralityTable(agg.qgraph)
+
+# outdegree: outgoing connections
+# indegree: incoming connections
+# closeness: a node’s capability of quickly reaching other nodes
+# betweenness: a node’s brokerage power in a network
+```
+
+```{r}
+#transforming weird table to useful df
+
+central.aff.df <- data.frame()
+
+central.aff.df <- central.aff[1:15,]
+central.aff.df <- select(central.aff.df, node)
+
+list.col <- list()
+
+for (i in unique(central.aff$measure)) {
+  c <- central.aff %>%
+    filter(measure == i) %>%
+    dplyr::select(value)
+  list.col[[i]] <- c
+}
+
+for (i in list.col) {
+  central.aff.df <- append(central.aff.df, i)
+}
+
+names(central.aff.df) <- c("node", "Betweenness", "Closenness", "InStrength", "OutStrength", "OutExpectedInfluence", "InExpectedInfluence")
+
+```
+
+
+# detection of communities (based off affiliative SNA)
+```{r}
+aff.igraph.undir <- as.undirected(aff.igraph, mode = 'collapse')
+# makes graph undirected for comm det code to work
+
+aff.louvain <- cluster_louvain(aff.igraph.undir)
+
+aff.louvain.member <- data.frame(node = 1:gorder(aff.igraph.undir), community = aff.louvain$membership)
+
+table(aff.louvain$membership) # to see the number of communities and the number of nodes in each community
+
+modularity(aff.louvain) # computes modularity
+```
+```{r}
+par(mar=c(0,0,0,0)+.1)
+set.seed(1)
+
+V(aff.igraph.undir)$community <- aff.louvain$membership
+
+plot(aff.igraph.undir,
+     vertex.color = V(aff.igraph.undir)$community,
+     vertex.label = V(aff.igraph.undir)$community,
+     label.color = 'black',
+     edge.color = 'darkgrey',
+     vertex.size = 10,
+     vertex.frame.color = 'white')
+```
+
+
+
+# DISTANCE
+```{r}
+data.dist <- filter(data2, Channel.Type == 'Interval')
+data.dist$newSessID <- paste(data.dist$SessionID, data.dist$Frame.Number, sep = "_")
+
+list.1 <- list() ## create new list
+
+library(matrixcalc)
+
+for (i in unique(data.dist$newSessID)) { ## iterate through SessionID
+
+  ## create df of names and coordinates for session 
+  df_coord <- data.dist %>% filter(newSessID == i) %>%
+    dplyr::select(Focal.Name, Coord.X, Coord.Y, newSessID)
+  
+  rownames(df_coord) <- df_coord$Focal.Name ## to ensure matrix rows and columns are labelled with names
+  
+  mat_dist <- as.matrix(dist(df_coord[2:3], method = "euclidean")) ## dist() produces a class, hence as.matrix() is required
+  ## create matrix of distances, using only coordinate columns in df (hence [2:3])
+  
+  mat_dist <- lower.triangle(mat_dist) ## replaces values in upper triangle of matrix with 0
+
+  df_dist <- as.data.frame(mat_dist, rownames = TRUE) ## transform matrix into df
+  
+  df_dist[df_dist == 0] <- NA ## change 0 to NA
+  
+  df_dist$SessionID <- df_coord$newSessID ## add SessionID column
+  
+  list.1[[i]] <- df_dist ## add df to list
+}
+```
+
+
+# merging all df in list
+```{r}
+library(reshape)
+
+merged.lists <- list.1 %>% reduce(full_join)
+
+# creating column for names since rownames() does not allow duplicate row names. (everything is still in order!
+# rows in merged are currently numbered.
+merged.lists$FocalMale <- data.dist$Focal.Name
+
+# moving SessionID and FocalMale columns to left of df
+merged.lists <- merged.lists %>% relocate(SessionID, .before = Bear) %>%
+  relocate(FocalMale, .after = SessionID)
+
+```
+
+
+# finding mean and sd of pairwise distances
+```{r}
+library(tidyselect)
+
+pos_mean <- as.data.frame(   ## because this produces a tibble, which rownames() does not work on
+  merged.lists %>% group_by(FocalMale) %>%
+  summarise(across(Bear:Uncle, ~mean(.x, na.rm = TRUE), '{.col}')))
+
+rownames(pos_mean) <- pos_mean$FocalMale
+
+pos_mean <- pos_mean %>% .[-1] %>%    ## remove FocalMale col
+  dplyr::select(sort(peek_vars()))       ## sort columns by alphabetical order
+
+pos_sd <- as.data.frame(
+  merged.lists %>% group_by(FocalMale) %>%
+  summarise(across(Bear:Uncle, ~sd(.x, na.rm = TRUE), '{.col}')))
+
+rownames(pos_sd) <- pos_sd$FocalMale
+
+pos_sd <- pos_sd %>% .[-1] %>%
+  dplyr::select(sort(peek_vars()))
+
+# across works within dplyr verbs like summarise. '{col}' at the end retains names of original columns. https://dplyr.tidyverse.org/reference/across.html
+```
+
+
+# rescaling
+```{r}
+library(scales)
+
+rescaled_dist <- merged.lists %>% group_by(FocalMale) %>%
+  summarise(
+      suppressWarnings(  ## must be placed directly in front of the fn that is producing warnings
+        across(Bear:Uncle,
+               ~rescale(.x,
+                        to = c(0, 100),
+                        from = range(.x, na.rm = TRUE, finite = TRUE)))))
+
+rescaled_dist <- rescaled_dist[rowSums(is.na(rescaled_dist)) != ncol(rescaled_dist[2:15]),]
+#remove all rows with only NaN values
+```
+ 
+
+# sna graph for distance
+```{r}
+# convert df of mean dist -> sna edge table of source, target, weight
+pos_mean <- as.matrix(pos_mean)
+dist.edges <- reshape::melt(pos_mean)
+
+dist.edges <- na.omit(dist.edges) # removing rows with NaN values
+
+# taking top 25% (22 of 91) values
+library(data.table)
+dist.edges <- data.table(dist.edges, key = "value") #sorts "value" col in ascending order
+top25 <- dist.edges[, head(.SD, 22)]
+
+#bottom 25%
+bot25 <- dist.edges[, tail(.SD, 22)]
+
+qgraph(top25,
+       directed = FALSE,
+       edge.labels = FALSE,
+       edge.color = "green",
+       title = "Shortest 25% of pairwise distances")
+```
+```{r}
+qgraph(bot25,
+       directed = FALSE,
+       edge.labels = FALSE,
+       edge.color = "green",
+       title = "Longest 25% of pairwise distances")
+```
+
+
+# UTILISATION DISTRIBUTION
+```{r}
+library(amt)
+
+```
+
+# graphs of individual space use
+```{r}
+data2$newdate = as.POSIXct(data2$DateTime) #create new column for datetime in correct format
+
+data2$day.no = lubridate::yday(data2$newdate) #yday returns the day of the year as a number
+
+# every graph is an individual -- data points are entries across all sessions
+ggplot(data2, aes(x = Coord.X, y = Coord.Y, colour = day.no)) +
+  geom_point(size = 1.5) +
+  facet_wrap(.~Focal.Name)
+```
